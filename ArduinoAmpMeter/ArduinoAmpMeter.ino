@@ -1,8 +1,5 @@
 /*
-  Blink
-  Turns on an LED on for one second, then off for one second, repeatedly.
- 
-  This example code is in the public domain.
+ Outputs power through sensor to console
  */
  
 unsigned long duration = 0;
