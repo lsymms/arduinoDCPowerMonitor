@@ -7,7 +7,7 @@
 #include <Adafruit_MCP23017.h>
 #include <Adafruit_RGBLCDShield.h>
 
-#define BLUE 0x4
+#define WHITE 0x7
 #define OFF 0x0
 
 // The shield uses the I2C SCL and SDA pins. On classic Arduinos
@@ -19,8 +19,10 @@ Adafruit_RGBLCDShield lcd = Adafruit_RGBLCDShield();
 unsigned long duration = 0;
 float avgAmps = 0;
 float maxAmps = 0;
-float sensorZeroValue = 0;
-unsigned long starttime; 
+// default
+float sensorZeroValue = 512;
+unsigned long startTime;
+unsigned long displayStartTime;
 
 // the setup routine runs once when you press reset:
 void setup() {        
@@ -31,11 +33,23 @@ void setup() {
   Serial.begin(9600);
   Serial.print("waiting for user to zero sensor");
   
-// loop until button select is pressed
-  waitForButton(BUTTON_SELECT);  
-  lcd.clear();
-  lcd.print("Zeroing Sensor..");
-  zero();    
+// loop until button select or > is pushed
+  boolean bStop = true;
+  do {
+    uint8_t button = waitForButton();
+    lcd.clear();
+    if (button == BUTTON_SELECT) {      
+      lcd.print("Zeroing Sensor..");
+      zero();    
+    // skip zero when you push the > button
+    } else if (button != BUTTON_RIGHT) {
+      bStop = false;
+      lcd.print("Push > to skip  ");
+      lcd.print("zero too default");
+    }
+  } while (bStop == false);
+      
+      
   // turn off LED
   pinMode(13, OUTPUT);
   digitalWrite(13, LOW);
@@ -48,14 +62,43 @@ void setup() {
   lcd.print("push > to start");
   waitForButton(BUTTON_RIGHT);
   lcd.clear();
-  lcd.setBacklight(OFF);
   lcd.print("Running...");
-
-  starttime = millis();
+  turnOnDisplay();
+  startTime = millis();
 }
 
-void waitForButton(uint8_t button) {
-  for (uint8_t buttons = lcd.readButtons();!(buttons & button);buttons = lcd.readButtons()) {}
+// block all processing until a specific button is pushed
+void waitForButton(uint8_t waitingFor) {
+  uint8_t pressed;
+  do {
+    pressed = waitForButton();
+    Serial.print ("pressed:");
+    Serial.println (pressed);
+    Serial.print ("waiting for:");
+    Serial.print (waitingFor);
+  } while (pressed != waitingFor);
+}
+
+// black all processing until a button is pushed. return that value
+uint8_t waitForButton() {
+  uint8_t ret = 0;
+  uint8_t buttons;
+  do {
+    buttons = lcd.readButtons();
+  } while (!buttons);
+  
+  if (buttons & BUTTON_SELECT) {
+    ret = BUTTON_SELECT;
+  } else if (buttons & BUTTON_RIGHT) {
+    ret = BUTTON_RIGHT;
+  } else if (buttons & BUTTON_LEFT) {
+    ret = BUTTON_LEFT;
+  } else if (buttons & BUTTON_UP) {
+    ret = BUTTON_UP;
+  } else if (buttons & BUTTON_DOWN) {
+    ret = BUTTON_DOWN;
+  }
+  return ret;
 }
 
 // the loop routine runs over and over again forever:
@@ -88,7 +131,7 @@ void loop() {
   lcd.setCursor(5,0);
   lcd.print("A");
   lcd.print(" T:");
-  long seconds = (millis() - starttime)/1000;
+  long seconds = (millis() - startTime)/1000;
   // less than 2 minutes
   if (seconds < 120) {
     lcd.print(seconds);
@@ -112,7 +155,33 @@ void loop() {
   lcd.print(ampHours,4);
   lcd.setCursor(6,1);
   lcd.print("AH");
+  
+  if ((millis() - displayStartTime) > 5000) {
+    turnOffDisplay();  
+  }
+  if (checkButton(BUTTON_SELECT)) {
+    turnOnDisplay();
+  }  
 
+}
+
+void turnOffDisplay() {
+  lcd.setBacklight(OFF);
+  displayStartTime = 0;
+}
+
+void turnOnDisplay() {
+  lcd.setBacklight(WHITE);
+  displayStartTime = millis();
+}
+
+boolean checkButton(uint8_t button) {
+  boolean ret = false;
+  uint8_t buttons = lcd.readButtons();
+  if (buttons & button) {
+    ret = true;
+  }
+  return ret;
 }
 
 float getVolts(int sensorValue) {
